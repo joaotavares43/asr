@@ -23,7 +23,7 @@
     \acro{DCT}{Discrete Cosine Transform}
 \end{acronym}
 
-\title{Automatic Speech Recognition\\}
+\title{Automatic Speech Recognition with \\ MFCC and DTW \\}
 \author{\IEEEauthorblockN{João Borges}
 \IEEEauthorblockA{\textit{Telecommunications, Automation and Electronics}\\ 
 \textit{Research and Development Center (LASSE)}\\
@@ -38,9 +38,7 @@ joao.tavares.borges@itec.ufpa.br}
 In this work, the Mel-frequency Cepstral Coefficient (MFCC) and 
 Dynamic Time Warping (DTW) algorithms are implemented in 
 Python to develop an isolated word recognition pipeline.
-The system currently shows 60\% accuracy in word identification when 
-a built-in MFCC function is used, and 40\% when an
-own implementation is utilized instead.
+The system currently shows around 60\% accuracy in word identification.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -48,23 +46,28 @@ MFCC, DTW, Speech Recognition
 \end{IEEEkeywords}
 
 \section{Introduction}
-The use of \ac{MFCC} to extract audio feature and \ac{DTW} to compare the obtained
-values is a classical method of \ac{ASR}. This method leverages the Mel frequency 
-scale, that is designed to be a perceptually relevant scale for pitch, meaning 
-that equal frequency distances have the same perceptual difference from the point 
-of view of a human listener. 
+The use of \ac{MFCC}\cite{dash2012speaker} to extract audio feature 
+and \ac{DTW}\cite{sakoe1978dynamic} to compare the obtained values is 
+a classical method of \ac{ASR} for simple isolated word 
+detection \cite{muda2010voice}. This method leverages the Mel frequency 
+scale, that is designed to be a perceptually relevant scale for pitch, 
+meaning that equal frequency distances have the same perceptual 
+difference from a human listener point of view. 
 
 \section{Data Processing Pipeline}
 This work uses a dataset composed of 105,000 WAVE audio files, with 30 different 
 classes, obtained from Tensorflow\footnote{https://storage.cloud.google.com/download.tensorflow.org/data/\\
-speech\_commands\_v0.02.tar.gz}, from which a subset of 5 classes will be used in 
-the experiments. The dataset is divided into 80\% for training and 20\% for 
-validation. The remaining process can be split into 3 steps:
+speech\_commands\_v0.02.tar.gz}, from which a subset of 5 classes, with 25 samples each, 
+will be used in the experiments. The dataset is divided into 80\% for training 
+and 20\% for validation. The remaining process can be split into 4 steps:
 
 \begin{itemize}
     \item Calculate \ac{MFCC} for all signals
-    \item Perform \ac{DTW} between sample and reference signals 
-    \item Obtain the mean of the \ac{DTW} values, which is the recognition rate
+    \item Perform \ac{DTW} between sample and reference signals to find the most similar ones
+    \item Check if the most similar sample have the same label as the reference (i.e. both are "cat"). 
+    If yes, then increment the recognition score. 
+    \item After finishing the process, obtain the mean between successful recognitions versus 
+    number of samples, which is the recognition rate.
 \end{itemize}
 
 In the following subsections each of these steps will be described in details.
@@ -95,38 +98,66 @@ In the following subsections each of these steps will be described in details.
 
 Due to the highly non stationary nature of speech data, composed of different 
 phonemes with their own frequencies distributed along the time, it is necessary
-to be capable of visualizing how the signal spectrum changes over time, a feature 
-that is lacking in the traditional Fourier transform. This motivates the method 
+to visualize how the signal spectrum changes over time, a feature 
+absent in the traditional Fourier transform technique. This motivates the method 
 known as \ac{STFT}, that divides the signal into frames through a process of 
 windowing and then applies the Fourier transform in each one of them. These 
 frames usually need to be overlapped in order to avoid loss of signal.
 In the current implementation, the \ac{STFT} adopts the widely used 
-\textit{Hann} window for the windowing process.
+\textit{Hann} window for the windowing process, as it smooths the discontinuities, 
+avoiding the artifacts over the spectrum seen when rectangular windows are used.
 
 \subsubsection{Mel filter banks}
 To calculate the Mel filter banks, first is necessary to determine the number of 
 Mel bands that will be used, then obtain the lowest and highest frequencies of 
 the signal in the Mel scale. After that the interval between the lowest and the 
-highest frequencies must be divided into a number of points equal to the number 
-of Mel bands, evenly separated. These points are then converted back to the Hertz 
-scale and rounded to the nearest bin. Finally, the triangular filters are created [Improve]
+highest frequencies must be divided into a number of evenly separated points, equal 
+to the number of Mel bands. These points are then converted back to the Hertz 
+scale and rounded to the nearest bin. Finally, the triangular filters are created.
+
 \subsubsection{The melspectrogram and the MFCC}
 In order to obtain the melspectrogram first we need the spectrogram, which is obtained
-by the magnitude squared of the \ac{STFT} result. After that, a dot product is executed between
-the spectrogram and the Mel filter banks, followed by a power to dB conversion, resulting in 
-the melspectrogram. To 
-\subsection{Performing the DTW}
+by squaring the magnitude of the \ac{STFT} result. After that, a dot product is executed 
+between the spectrogram and the Mel filter banks, followed by a power to dB conversion, 
+resulting in the melspectrogram. To obtain the \ac{MFCC}, this spectrogram goes through
+a \ac{DCT}. This last transformation could be a Fourier transform, but in order to discard
+the complex valued component, the \ac{DCT} is used instead.
+ 
+\subsection{Performing the DTW and Evaluating the System Performance}
+After obtaining the \acp{MFCC} of all the dataset, 20\% of it is separated to act as 
+validation set. The next step is to evaluate if the system can successfully compare the 
+\acp{MFCC} of the sample and validation sets to point out similar words. This similarity
+is calculated using \ac{DTW}, which is a method used to compare two sequences of numbers with 
+different lengths \cite{sakoe1978dynamic}. The implementation utilized for the \ac{DTW} 
+is publicly available in an online repository\footnote{https://github.com/pierre-rouanet/dtw}.
 
-\subsection{Evaluating the system performance}
-In this step, a process of cross-validation is implemented. \textit{Leave P out} 
-cross-validation is [...]
-a The code is available publicly\footnote{https://github.com/joaotavares43/asr-jupyter}
+The procedure to obtain the recognition rate is the following:
 
-\begin{figure}[htbp]
-%\centerline{\includegraphics{fig1.png}}
-\caption{Example of a figure caption.}
-\label{fig}
-\end{figure}
+\begin{itemize}
+    \item First, a sample from the validation set is chosen
+    \item After that, the system performs \ac{DTW} between this sample
+and all the others in the training set, to get the one that has the 
+\ac{MFCC} with the highest degree of similarity, in other words, the one that has the minimum
+distance calculated via \ac{DTW}
+    \item The system then checks if this sample, with minimum distance from the reference, 
+    corresponds to the same word. If yes, then the system correctly recognized the word by 
+    checking \ac{MFCC} similarity with \ac{DTW}, increasing one point in the recognition score
+    \item Finally, after performing the same process for all samples in the validation set, the system
+    calculates a mean score by dividing it with the amount of samples in the validation set. 
+\end{itemize}
+
+\section{Conclusion}
+The \ac{ASR} performed by the described pipeline resulted in a 60\% accuracy rate for the subset utilized
+in the experiments. This performance can be improved by tuning several hyperparameters from the processes
+described, such as the number of FFT points and window overlap and stride in the \ac{STFT}, or the number
+of Mel bands in the Mel filter bank design etc. The code used is available 
+publicly in an online repository\footnote{https://github.com/joaotavares43/asr-jupyter/blob/main/asr.ipynb}
+
+% \begin{figure}[htbp]
+% %\centerline{\includegraphics{fig1.png}}
+% \caption{Example of a figure caption.}
+% \label{fig}
+% \end{figure}
 
 
 % \section*{References}
@@ -150,8 +181,8 @@ a The code is available publicly\footnote{https://github.com/joaotavares43/asr-j
 % For papers published in translation journals, please give the English 
 % citation first, followed by the original foreign-language citation \cite{b6}.
 
-% \bibliographystyle{./bibliography/IEEEtran}
-% \bibliography{./bibliography/IEEEabrv,./bibliography/IEEEexample}
+\bibliographystyle{./bibliography/IEEEtran}
+\bibliography{./bibliography/IEEEabrv,./bibliography/IEEEexample}
 
 % \vspace{12pt}
 % \color{red}
